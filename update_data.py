@@ -1,169 +1,141 @@
 """
-update_data.py
---------------
-GitHub Actions에서 매일 자동 실행되는 데이터 갱신 스크립트.
-- ECOS API  → USDKRW (한국은행 서울외환 매매기준율)
-- Yahoo Finance → USDJPY
+update_data.py — GitHub Actions 자동 갱신 스크립트
+ECOS API 정확한 URL 형식:
+  /StatisticSearch/{key}/json/kr/{행시작}/{행끝}/{통계표}/{주기}/{시작일}/{종료일}/{항목코드}
 """
 
-import os
-import re
-import json
-import requests
-import datetime
+import os, re, json, requests, datetime, time
 
-# ── 설정 ──────────────────────────────────────────
 ECOS_KEY   = os.environ.get("ECOS_API_KEY", "")
 START_DATE = "20220601"
 TODAY      = datetime.date.today().strftime("%Y%m%d")
 TODAY_DASH = datetime.date.today().strftime("%Y-%m-%d")
 
-print(f"ECOS_KEY 확인: {'설정됨 (' + ECOS_KEY[:4] + '...)' if ECOS_KEY else '❌ 없음'}")
+print(f"ECOS_KEY: {'설정됨 (' + ECOS_KEY[:4] + '...)' if ECOS_KEY else '❌ 없음'}")
 
-# ── 1. USDKRW — 한국은행 ECOS ─────────────────────
+# ── 1. USDKRW — ECOS ────────────────────────────
 def fetch_krw():
+    # ECOS URL 형식: /행시작/행끝/통계표코드/주기/시작일/종료일/항목코드
     candidates = [
-        ("731Y001", "0000001"),
-        ("036Y001", "0000003"),
-        ("731Y001", "0000003"),
+        ("731Y001", "0000001"),   # 서울외환 매매기준율 USD
+        ("731Y001", "0000003"),   # 서울외환 재정환율
+        ("036Y001", "0000001"),   # 원/달러 환율
     ]
-    for stat_code, item_code in candidates:
+    for stat, item in candidates:
         url = (
             f"https://ecos.bok.or.kr/api/StatisticSearch"
-            f"/{ECOS_KEY}/json/kr/1/5000"
-            f"/{stat_code}/DD/{START_DATE}/{TODAY}/{item_code}"
+            f"/{ECOS_KEY}/json/kr/1/2000"
+            f"/{stat}/DD/{START_DATE}/{TODAY}/{item}"
         )
-        print(f"[ECOS] 시도: {stat_code}/{item_code}")
+        print(f"[ECOS] {stat}/{item} 요청...")
         try:
-            r = requests.get(url, timeout=15)
-            r.raise_for_status()
+            r = requests.get(url, timeout=20)
+            print(f"[ECOS] HTTP {r.status_code}")
             data = r.json()
-            print(f"[ECOS] 응답 키: {list(data.keys())}")
+            top_keys = list(data.keys())
+            print(f"[ECOS] 응답키: {top_keys}")
+
             if "RESULT" in data:
-                msg = data["RESULT"].get("MESSAGE","")
-                print(f"[ECOS] 오류응답: {msg} → 다음 코드")
+                print(f"[ECOS] 오류: {data['RESULT'].get('MESSAGE','')}")
                 continue
-            if "StatisticSearch" not in data:
-                print(f"[ECOS] StatisticSearch 없음: {str(data)[:200]}")
-                continue
-            rows = data["StatisticSearch"]["row"]
-            if not rows:
-                print("[ECOS] row 비어있음 → 다음 코드")
-                continue
-            result = {}
-            for row in rows:
-                date = row.get("TIME","")
-                val  = row.get("DATA_VALUE","")
-                if val and val not in ("-",""):
-                    try:
-                        dt = f"{date[:4]}-{date[4:6]}-{date[6:]}"
-                        result[dt] = float(val.replace(",",""))
-                    except Exception:
-                        pass
-            if result:
-                print(f"[ECOS] ✅ USDKRW {len(result)}건 (코드: {stat_code}/{item_code})")
-                return result
-            print("[ECOS] 파싱 후 데이터 없음 → 다음 코드")
+
+            if "StatisticSearch" in data:
+                rows = data["StatisticSearch"].get("row", [])
+                print(f"[ECOS] row 수: {len(rows)}")
+                if rows:
+                    result = {}
+                    for row in rows:
+                        d = row.get("TIME","")
+                        v = row.get("DATA_VALUE","")
+                        if v and v not in ("-",""):
+                            try:
+                                dt = f"{d[:4]}-{d[4:6]}-{d[6:]}"
+                                result[dt] = float(v.replace(",",""))
+                            except:
+                                pass
+                    if result:
+                        print(f"[ECOS] ✅ {len(result)}건 수신")
+                        return result
+
         except Exception as e:
-            print(f"[ECOS] 예외: {e} → 다음 코드")
-    raise RuntimeError("ECOS API: 모든 통계코드 시도 실패")
+            print(f"[ECOS] 예외: {e}")
+
+    raise RuntimeError("ECOS 모든 코드 실패")
 
 
-# ── 2. USDJPY — Yahoo Finance ──────────────────────
+# ── 2. USDJPY — Yahoo Finance ────────────────────
 def fetch_jpy():
-    import time
     end_ts   = int(time.time())
     start_ts = int(datetime.datetime(2022,6,1).timestamp())
-    urls = [
-        f"https://query1.finance.yahoo.com/v8/finance/chart/USDJPY=X?period1={start_ts}&period2={end_ts}&interval=1d",
-        f"https://query2.finance.yahoo.com/v8/finance/chart/USDJPY=X?period1={start_ts}&period2={end_ts}&interval=1d",
-    ]
-    headers = {"User-Agent": "Mozilla/5.0"}
-    for url in urls:
+    for host in ["query1", "query2"]:
+        url = (
+            f"https://{host}.finance.yahoo.com/v8/finance/chart/USDJPY=X"
+            f"?period1={start_ts}&period2={end_ts}&interval=1d"
+        )
         try:
-            r = requests.get(url, headers=headers, timeout=15)
-            r.raise_for_status()
-            data       = r.json()["chart"]["result"][0]
-            timestamps = data["timestamp"]
-            closes     = data["indicators"]["quote"][0]["close"]
+            r = requests.get(url, headers={"User-Agent":"Mozilla/5.0"}, timeout=15)
+            d = r.json()["chart"]["result"][0]
             result = {}
-            for ts, cl in zip(timestamps, closes):
-                if cl is None:
-                    continue
-                dt = datetime.date.fromtimestamp(ts).strftime("%Y-%m-%d")
-                result[dt] = round(float(cl), 3)
+            for ts, cl in zip(d["timestamp"], d["indicators"]["quote"][0]["close"]):
+                if cl:
+                    dt = datetime.date.fromtimestamp(ts).strftime("%Y-%m-%d")
+                    result[dt] = round(float(cl), 3)
             if result:
-                print(f"[Yahoo] ✅ USDJPY {len(result)}건")
+                print(f"[Yahoo] ✅ {len(result)}건")
                 return result
         except Exception as e:
-            print(f"[Yahoo] 오류: {e} → 다음 URL")
-    raise RuntimeError("Yahoo Finance: 모든 URL 시도 실패")
+            print(f"[Yahoo/{host}] {e}")
+    raise RuntimeError("Yahoo 실패")
 
 
 # ── 3. 병합 ──────────────────────────────────────
-def merge(krw_dict, jpy_dict):
-    common = sorted(set(krw_dict) & set(jpy_dict))
-    dates  = common
-    krw    = [krw_dict[d] for d in common]
-    jpy    = [jpy_dict[d] for d in common]
-    print(f"[Merge] 공통 {len(dates)}건 (최신: {dates[-1]})")
-    return dates, jpy, krw
+def merge(krw_d, jpy_d):
+    common = sorted(set(krw_d) & set(jpy_d))
+    print(f"[Merge] {len(common)}건, 최신: {common[-1]}")
+    return common, [jpy_d[d] for d in common], [krw_d[d] for d in common]
 
 
-# ── 4. HTML 업데이트 ──────────────────────────────
-def update_html(dates, jpy, krw, html_path="index.html"):
-    with open(html_path, "r", encoding="utf-8") as f:
-        html = f.read()
+# ── 4. HTML 갱신 ─────────────────────────────────
+def update_html(dates, jpy, krw, path="index.html"):
+    html = open(path, encoding="utf-8").read()
 
-    def replace_var(content, var_name, new_list):
-        pattern = rf'(const {var_name}=)\[.*?\]'
-        replacement = rf'\g<1>{json.dumps(new_list, ensure_ascii=False)}'
-        new_content, n = re.subn(pattern, replacement, content, flags=re.DOTALL)
-        print(f"  {'✅' if n else '⚠️ '} {var_name} ({len(new_list)}건, 치환:{n})")
-        return new_content if n else content
+    def rep(content, var, lst):
+        pat = rf'(const {var}=)\[.*?\]'
+        new, n = re.subn(pat, rf'\g<1>{json.dumps(lst)}', content, flags=re.DOTALL)
+        print(f"  {'✅' if n else '⚠️ '} {var} ({len(lst)}건)")
+        return new if n else content
 
-    html = replace_var(html, "dates",   dates)
-    html = replace_var(html, "jpyData", jpy)
-    html = replace_var(html, "krwData", krw)
+    html = rep(html, "dates",   dates)
+    html = rep(html, "jpyData", jpy)
+    html = rep(html, "krwData", krw)
 
     stamp = f"<!-- last-updated: {TODAY_DASH} -->"
-    if "<!-- last-updated:" in html:
-        html = re.sub(r'<!-- last-updated:.*?-->', stamp, html)
-    else:
-        html = html.replace("</head>", f"{stamp}\n</head>", 1)
+    html = re.sub(r'<!-- last-updated:.*?-->', stamp, html) if "<!-- last-updated:" in html \
+           else html.replace("</head>", f"{stamp}\n</head>", 1)
 
-    with open(html_path, "w", encoding="utf-8") as f:
-        f.write(html)
+    open(path, "w", encoding="utf-8").write(html)
     print(f"[HTML] 저장 완료")
 
 
-# ── 5. 배지 업데이트 ──────────────────────────────
-def update_badges(dates, jpy, krw, html_path="index.html"):
-    with open(html_path, "r", encoding="utf-8") as f:
-        html = f.read()
+# ── 5. 배지 갱신 ─────────────────────────────────
+def update_badges(dates, jpy, krw, path="index.html"):
+    html = open(path, encoding="utf-8").read()
     lj, lk, ld = jpy[-1], krw[-1], dates[-1]
-    html = re.sub(r'USDJPY \d+\.\d+',     f'USDJPY {lj:.1f}', html)
-    html = re.sub(r'USDKRW [\d,]+',       f'USDKRW {lk:,.0f}', html)
-    html = re.sub(r'\d{4}\.\d{2}\.\d{2} 기준', f'{ld.replace("-",".")} 기준', html)
-    with open(html_path, "w", encoding="utf-8") as f:
-        f.write(html)
-    print(f"[Badge] JPY={lj:.1f}, KRW={lk:,.0f} ({ld})")
+    html = re.sub(r'USDJPY \d+\.\d+',          f'USDJPY {lj:.1f}', html)
+    html = re.sub(r'USDKRW [\d,]+',             f'USDKRW {lk:,.0f}', html)
+    html = re.sub(r'\d{4}\.\d{2}\.\d{2} 기준',  f'{ld.replace("-",".")} 기준', html)
+    open(path, "w", encoding="utf-8").write(html)
+    print(f"[Badge] JPY={lj:.1f} KRW={lk:,.0f} ({ld})")
 
 
 # ── MAIN ─────────────────────────────────────────
 if __name__ == "__main__":
-    print(f"=== 데이터 갱신 시작 ({TODAY_DASH}) ===")
-    try:
-        krw_dict = fetch_krw()
-    except Exception as e:
-        print(f"[FATAL] KRW 실패: {e}")
-        raise SystemExit(1)
-    try:
-        jpy_dict = fetch_jpy()
-    except Exception as e:
-        print(f"[FATAL] JPY 실패: {e}")
-        raise SystemExit(1)
-    dates, jpy, krw = merge(krw_dict, jpy_dict)
+    print(f"=== 갱신 시작 {TODAY_DASH} ===")
+    try:    krw_d = fetch_krw()
+    except Exception as e: print(f"[FATAL] KRW: {e}"); raise SystemExit(1)
+    try:    jpy_d = fetch_jpy()
+    except Exception as e: print(f"[FATAL] JPY: {e}"); raise SystemExit(1)
+    dates, jpy, krw = merge(krw_d, jpy_d)
     update_html(dates, jpy, krw)
     update_badges(dates, jpy, krw)
     print("=== 완료 ✅ ===")
