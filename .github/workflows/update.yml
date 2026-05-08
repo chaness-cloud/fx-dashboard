@@ -1,0 +1,42 @@
+name: 📊 Daily FX Dashboard Update
+
+on:
+  schedule:
+    # 매일 한국시간 오전 9시 = UTC 0시
+    - cron: '0 0 * * 1-5'   # 평일만 (월~금)
+  workflow_dispatch:          # 수동 실행 버튼도 활성화
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. 저장소 체크아웃
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+
+      # 2. Python 설치
+      - name: 🐍 Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      # 3. 패키지 설치
+      - name: 📦 Install dependencies
+        run: pip install requests pandas
+
+      # 4. 데이터 갱신 스크립트 실행
+      - name: 🔄 Run update script
+        env:
+          ECOS_API_KEY: ${{ secrets.ECOS_API_KEY }}
+        run: python update_data.py
+
+      # 5. 변경사항 커밋 & 푸시
+      - name: 💾 Commit and push
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add index.html
+          git diff --staged --quiet || git commit -m "📊 Auto update: $(date '+%Y-%m-%d %H:%M KST')"
+          git push
+
