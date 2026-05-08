@@ -1,0 +1,678 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>엔 캐리트레이드 & 환율 분석 대시보드 | 베센트 방일 2026</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:#080d14;color:#e2e8f0;font-family:'Segoe UI','Apple SD Gothic Neo',sans-serif;min-height:100vh;}
+
+/* ── HEADER ── */
+.header{background:linear-gradient(135deg,#070e1a 0%,#0d2137 60%,#1a1a2e 100%);padding:20px 32px 0;border-bottom:2px solid #1e3a5f;position:relative;overflow:hidden;}
+.header::before{content:'';position:absolute;top:-60px;right:-60px;width:300px;height:300px;background:radial-gradient(circle,rgba(37,99,235,0.12) 0%,transparent 70%);pointer-events:none;}
+.header-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;}
+.header h1{font-size:20px;font-weight:800;color:#fff;letter-spacing:-0.5px;}
+.header h1 span{color:#60a5fa;}
+.header p{font-size:12px;color:#64748b;margin-top:3px;}
+.header-badge{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px;}
+.badge{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600;}
+.badge-blue{background:#0f2d50;color:#60a5fa;border:1px solid #1e4a7a;}
+.badge-yellow{background:#2d1f00;color:#fbbf24;border:1px solid #4a3500;}
+.badge-red{background:#2d0a0a;color:#f87171;border:1px solid #4a1515;}
+.badge-green{background:#0a2d1a;color:#34d399;border:1px solid #154a2e;}
+.badge-purple{background:#1a0d2d;color:#c084fc;border:1px solid #2e1a4a;}
+
+/* KPI STRIP */
+.kpi-strip{display:grid;grid-template-columns:repeat(5,1fr);gap:1px;background:#1e2d3d;border-top:1px solid #1e2d3d;margin-top:16px;}
+.kpi{background:#0d1520;padding:10px 16px;text-align:center;}
+.kpi-label{font-size:10px;color:#475569;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;}
+.kpi-val{font-size:18px;font-weight:700;color:#e2e8f0;}
+.kpi-sub{font-size:10px;margin-top:2px;}
+.up{color:#34d399;} .dn{color:#f87171;} .neu{color:#94a3b8;}
+
+/* ── TABS ── */
+.tabs{display:flex;background:#0a1220;border-bottom:1px solid #1e2d3d;overflow-x:auto;}
+.tab{padding:12px 22px;font-size:12px;font-weight:600;cursor:pointer;color:#475569;border-bottom:3px solid transparent;white-space:nowrap;transition:all .2s;}
+.tab.active{color:#3b82f6;border-bottom-color:#3b82f6;background:#0d1928;}
+.tab:hover:not(.active){color:#94a3b8;}
+
+/* ── CONTAINER ── */
+.container{padding:20px 28px;}
+.panel{display:none;} .panel.active{display:block;}
+
+/* ── CARDS ── */
+.stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px;}
+.stat-card{background:#0d1520;border:1px solid #1e2d3d;border-radius:10px;padding:14px 16px;}
+.stat-card.hl{border-color:#2563eb;background:#09192e;}
+.stat-label{font-size:10px;color:#475569;text-transform:uppercase;letter-spacing:.5px;margin-bottom:5px;}
+.stat-value{font-size:20px;font-weight:700;}
+.stat-sub{font-size:10px;color:#475569;margin-top:3px;}
+
+/* ── CHART WRAP ── */
+.cw{background:#0d1520;border:1px solid #1e2d3d;border-radius:12px;padding:18px;margin-bottom:18px;}
+.cw-title{font-size:13px;font-weight:700;color:#cbd5e1;margin-bottom:3px;}
+.cw-sub{font-size:11px;color:#475569;margin-bottom:14px;}
+canvas{max-height:400px!important;}
+
+/* ── LEGEND ── */
+.leg{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:10px;}
+.li{display:flex;align-items:center;gap:5px;font-size:11px;color:#94a3b8;}
+.ld{width:20px;height:3px;border-radius:2px;}
+.ldd{width:20px;border-top:2px dashed currentColor;}
+
+/* ── GRID 2-COL ── */
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:18px;}
+
+/* ── TABLE ── */
+.tbl{width:100%;border-collapse:collapse;font-size:12px;}
+.tbl th{background:#0a1928;color:#64748b;font-weight:600;padding:8px 12px;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.4px;}
+.tbl td{padding:9px 12px;border-top:1px solid #121e2e;color:#cbd5e1;vertical-align:top;line-height:1.5;}
+.tbl tr:hover td{background:#0d1928;}
+.tbl .num{font-weight:700;font-variant-numeric:tabular-nums;}
+.bull{color:#34d399;font-weight:700;} .base{color:#60a5fa;font-weight:700;} .bear{color:#f87171;font-weight:700;} .warn{color:#fbbf24;font-weight:700;}
+
+/* ── BOX ── */
+.box{background:#0d1520;border:1px solid #1e2d3d;border-radius:12px;padding:18px;margin-bottom:18px;}
+.box-title{font-size:13px;font-weight:700;color:#cbd5e1;margin-bottom:14px;display:flex;align-items:center;gap:8px;}
+.insight{background:#091520;border-left:3px solid #2563eb;border-radius:0 8px 8px 0;padding:12px 16px;margin-bottom:10px;}
+.insight-src{font-size:10px;color:#2563eb;font-weight:600;margin-bottom:4px;text-transform:uppercase;}
+.insight-txt{font-size:12px;color:#94a3b8;line-height:1.6;font-style:italic;}
+
+/* heatmap */
+.hm-grid{display:grid;grid-template-columns:140px repeat(3,1fr);gap:2px;}
+.hm-cell{padding:10px 8px;border-radius:4px;text-align:center;font-size:11px;font-weight:600;}
+.hm-head{background:#0a1928;color:#64748b;font-size:10px;text-transform:uppercase;}
+.hm-label{background:#0a1928;color:#94a3b8;text-align:left;padding-left:10px;}
+.hm-low{background:#0d2e1e;color:#34d399;}
+.hm-mid{background:#2d1f00;color:#fbbf24;}
+.hm-hi{background:#2d0a0a;color:#f87171;}
+.hm-pos{background:#0d1f4a;color:#60a5fa;}
+
+.note{font-size:10px;color:#334155;margin-top:10px;line-height:1.7;}
+.divider{height:1px;background:#1e2d3d;margin:16px 0;}
+</style>
+</head>
+<body>
+
+<!-- ═══ HEADER ═══ -->
+<div class="header">
+  <div class="header-top">
+    <div>
+      <h1>🇯🇵 엔 캐리트레이드 & 환율 분석 <span>대시보드</span></h1>
+      <p>베센트 재무장관 방일(2026.05.11) 前後 금융시장 종합 분석 &nbsp;|&nbsp; 2022.06 ~ 2026.05</p>
+      <div class="header-badge">
+        <span class="badge badge-blue">USDJPY 156.9</span>
+        <span class="badge badge-red">USDKRW 1,454</span>
+        <span class="badge badge-yellow">BOJ 금리 0.75%</span>
+        <span class="badge badge-green">캐리 잔존 ~$500B</span>
+        <span class="badge badge-purple">베센트 訪日 D+0</span>
+      </div>
+    </div>
+  </div>
+  <div class="kpi-strip">
+    <div class="kpi"><div class="kpi-label">미·일 금리차</div><div class="kpi-val">300bp</div><div class="kpi-sub dn">캐리 핵심 동인</div></div>
+    <div class="kpi"><div class="kpi-label">JPY 145~150 시 KRW</div><div class="kpi-val">1,372</div><div class="kpi-sub neu">과거 263일 평균</div></div>
+    <div class="kpi"><div class="kpi-label">엔캐리 추정 잔액</div><div class="kpi-val">~$500B</div><div class="kpi-sub dn">Morgan Stanley</div></div>
+    <div class="kpi"><div class="kpi-label">2024.8 청산률</div><div class="kpi-val">65~75%</div><div class="kpi-sub dn">JPMorgan 추정</div></div>
+    <div class="kpi"><div class="kpi-label">전체 상관계수</div><div class="kpi-val">0.763</div><div class="kpi-sub up">JPY↔KRW</div></div>
+  </div>
+</div>
+
+<!-- ═══ TABS ═══ -->
+<div class="tabs">
+  <div class="tab active" onclick="sw('fx','this')">📈 USDJPY / USDKRW</div>
+  <div class="tab" onclick="sw('scatter','this')">🔵 상관관계 분석</div>
+  <div class="tab" onclick="sw('scenario','this')">🎯 KRW 시나리오</div>
+  <div class="tab" onclick="sw('carry','this')">💴 캐리 규모 추이</div>
+  <div class="tab" onclick="sw('unwind','this')">⚡ 청산 시나리오</div>
+</div>
+
+<div class="container">
+
+<!-- ═══ TAB 1: FX ═══ -->
+<div id="tab-fx" class="panel active">
+  <div class="stats-grid">
+    <div class="stat-card"><div class="stat-label">현재 USDJPY</div><div class="stat-value" style="color:#f59e0b;">156.9</div><div class="stat-sub">2026.05.08 기준</div></div>
+    <div class="stat-card"><div class="stat-label">현재 USDKRW</div><div class="stat-value" style="color:#3b82f6;">1,454</div><div class="stat-sub">2026.05.07 기준</div></div>
+    <div class="stat-card hl"><div class="stat-label">JPY 145~150 시 KRW</div><div class="stat-value" style="color:#60a5fa;">1,372</div><div class="stat-sub">263거래일 평균 (2022~현재)</div></div>
+    <div class="stat-card"><div class="stat-label">145~150 구간 내 상관</div><div class="stat-value" style="color:#a78bfa;">0.129</div><div class="stat-sub">전체: 0.763 → 급락</div></div>
+  </div>
+  <div class="cw">
+    <div class="cw-title">USDJPY & USDKRW 시계열 (2022.06 ~ 2026.05)</div>
+    <div class="cw-sub">녹색 음영 = JPY 145~150 구간 / 세로선 = 주요 이벤트 (14개)</div>
+    <div class="leg">
+      <div class="li"><div class="ld" style="background:#f59e0b;"></div>USDJPY (좌축)</div>
+      <div class="li"><div class="ld" style="background:#3b82f6;"></div>USDKRW (우축)</div>
+      <div class="li"><div class="ld" style="background:rgba(34,197,94,0.3);border:1px solid #22c55e;height:10px;border-radius:2px;"></div>JPY 145~150 구간</div>
+    </div>
+    <canvas id="mainChart"></canvas>
+  </div>
+  <div class="g2">
+    <div class="box" style="margin:0;">
+      <div class="box-title">📌 에피소드별 JPY 145~150 시 KRW</div>
+      <table class="tbl">
+        <tr><th>시기</th><th>배경</th><th>KRW 평균</th></tr>
+        <tr><td>2022.10</td><td>日 재무성 첫 개입</td><td class="num warn">1,419원</td></tr>
+        <tr><td>2023.08~12</td><td>연준 피벗 기대</td><td class="num bull">1,328원</td></tr>
+        <tr><td>2024.07~10</td><td>BOJ 인상+캐리청산</td><td class="num base">1,358원</td></tr>
+        <tr><td>2025.01~현재</td><td>트럼프 관세+계엄</td><td class="num bear">1,407원</td></tr>
+      </table>
+    </div>
+    <div class="box" style="margin:0;">
+      <div class="box-title">📌 주요 이벤트 & 환율 반응</div>
+      <table class="tbl">
+        <tr><th>날짜</th><th>이벤트</th><th>JPY 반응</th></tr>
+        <tr><td>2022.09</td><td>日 재무성 첫 개입</td><td class="bull">▲ 엔 급등</td></tr>
+        <tr><td>2024.03</td><td>BOJ 마이너스금리 해제</td><td class="bull">▲ 엔 강세</td></tr>
+        <tr><td>2024.08</td><td>캐리청산 쇼크</td><td class="bull">▲▲ 급등</td></tr>
+        <tr><td>2024.12</td><td>韓 비상계엄</td><td class="neu">— JPY무관</td></tr>
+        <tr><td>2025.04</td><td>트럼프 상호관세</td><td class="bull">▲ 엔 강세</td></tr>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ TAB 2: SCATTER ═══ -->
+<div id="tab-scatter" class="panel">
+  <div class="cw">
+    <div class="cw-title">USDJPY vs USDKRW 산점도 (2022.06~현재)</div>
+    <div class="cw-sub">파란점=일반 구간 / 주황점=JPY 145~150 / 빨간별=현재 / 노란삼각=시나리오 목표 / 회색선=회귀선</div>
+    <canvas id="scatterChart" style="max-height:460px!important;"></canvas>
+  </div>
+  <div class="g2">
+    <div class="box" style="margin:0;">
+      <div class="box-title" style="color:#60a5fa;">전체 구간 (R = 0.763)</div>
+      <p style="font-size:12px;color:#94a3b8;line-height:1.7;">달러 강세 국면에서 엔화·원화 동반 약세. 전반적으로 강한 양의 상관관계. 글로벌 달러 사이클이 두 통화를 같은 방향으로 끌어당기는 구조.</p>
+    </div>
+    <div class="box" style="margin:0;">
+      <div class="box-title" style="color:#fbbf24;">JPY 145~150 구간 (R = 0.129)</div>
+      <p style="font-size:12px;color:#94a3b8;line-height:1.7;">상관관계 급락. 이 구간에서 KRW는 엔화보다 국내 정치 리스크(계엄), 美 CPI 서프라이즈, 연준 발언 등 독자 요인에 더 민감하게 반응. 시기마다 KRW 수준이 1,290~1,480으로 크게 분산.</p>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ TAB 3: KRW SCENARIO ═══ -->
+<div id="tab-scenario" class="panel">
+  <div class="cw">
+    <div class="cw-title">USDKRW 시나리오 전망 — 엔화 145 도달 시</div>
+    <div class="cw-sub">실선=실제 / 점선=시나리오 (최근 8개월 회귀, R=0.914) / 음영=불확실성 범위</div>
+    <div class="leg">
+      <div class="li"><div class="ld" style="background:#3b82f6;"></div>USDKRW 실제</div>
+      <div class="li" style="color:#34d399;"><div class="ldd" style="color:#34d399;"></div>강세 KRW 1,350</div>
+      <div class="li" style="color:#fbbf24;"><div class="ldd" style="color:#fbbf24;"></div>기본 KRW 1,372</div>
+      <div class="li" style="color:#f87171;"><div class="ldd" style="color:#f87171;"></div>약세 KRW 1,395</div>
+    </div>
+    <canvas id="scenarioChart"></canvas>
+  </div>
+  <div class="box">
+    <div class="box-title">🎯 USDJPY 145 달성 시 USDKRW 3가지 시나리오</div>
+    <table class="tbl">
+      <tr><th>시나리오</th><th>JPY 목표</th><th>KRW 전망</th><th>현재 대비</th><th>핵심 가정</th></tr>
+      <tr><td>🟢 강세</td><td>145</td><td class="bull">1,350원</td><td class="bull">-104원 (-7.2%)</td><td style="font-size:11px;">과거 145~150 Q25 수준 반영, BOJ 조기 인상+연준 인하</td></tr>
+      <tr><td>🔵 기본</td><td>145</td><td class="base">1,372원</td><td class="base">-82원 (-5.6%)</td><td style="font-size:11px;">최근 8개월 회귀 기반 (slope=8.04)</td></tr>
+      <tr><td>🔴 약세</td><td>145</td><td class="bear">1,395원</td><td class="bear">-59원 (-4.1%)</td><td style="font-size:11px;">2025년 이후 구조적 KRW 약세 지속 가정</td></tr>
+    </table>
+    <div class="note">※ 기본 시나리오: 최근 8개월 회귀 기반 (slope=8.04, R=0.914) | 강세: 과거 145~150 구간 Q25(1,334) 수준 반영 | 약세: 2025년 이후 구조적 KRW 약세 지속 가정<br>※ 이 분석은 참고용이며 실제 환율은 국내 정치·지정학·자본흐름 등 추가 변수에 의해 크게 달라질 수 있습니다.</div>
+  </div>
+</div>
+
+<!-- ═══ TAB 4: CARRY SIZE ═══ -->
+<div id="tab-carry" class="panel">
+
+  <!-- 단위 토글 -->
+  <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">
+    <span style="font-size:12px;color:#64748b;font-weight:600;">단위 선택</span>
+    <div id="unitToggle" style="display:flex;background:#0a1220;border:1px solid #1e2d3d;border-radius:8px;overflow:hidden;">
+      <button id="btnUSD" onclick="setUnit('usd')" style="padding:7px 18px;font-size:12px;font-weight:700;border:none;cursor:pointer;background:#2563eb;color:#fff;transition:all .2s;">USD ($)</button>
+      <button id="btnKRW" onclick="setUnit('krw')" style="padding:7px 18px;font-size:12px;font-weight:700;border:none;cursor:pointer;background:transparent;color:#64748b;transition:all .2s;">원화 (조원)</button>
+    </div>
+    <span id="unitNote" style="font-size:11px;color:#475569;">1 USD = 1,454원 기준 환산</span>
+  </div>
+
+  <div class="g2">
+    <div class="cw" style="margin:0;">
+      <div class="cw-title">엔 캐리트레이드 규모 역사적 추이</div>
+      <div id="carryHistSub" class="cw-sub">투기적 포지션 기준 추정치 (단위: 십억 달러)</div>
+      <canvas id="carryHistChart" style="max-height:300px!important;"></canvas>
+    </div>
+    <div class="cw" style="margin:0;">
+      <div class="cw-title">기관별 추정치 비교 (정의 방법론별)</div>
+      <div id="carryIBSub" class="cw-sub">협의(투기적) ~ 광의(구조적) 스펙트럼</div>
+      <canvas id="carryIBChart" style="max-height:300px!important;"></canvas>
+    </div>
+  </div>
+
+  <div class="box">
+    <div class="box-title">📐 BIS 통계 기반 추정 — 방법론별 분류</div>
+    <table class="tbl">
+      <tr><th>방법론</th><th id="th-scale">추정 규모 (달러)</th><th id="th-scale-krw" style="display:none;">추정 규모 (조원)</th><th>기준 데이터</th><th>특징</th></tr>
+      <tr>
+        <td>① 일본 은행 해외대출</td>
+        <td class="num base usd-cell">$271B (¥41T)</td>
+        <td class="num base krw-cell" style="display:none;">약 394조원</td>
+        <td>BIS IBS Q1 2024</td>
+        <td style="font-size:11px;">가장 직접적 proxy. 2021년 이후 꾸준히 증가. 단, 전부 캐리 목적은 아님</td>
+      </tr>
+      <tr>
+        <td>② FX 파생상품 조정치</td>
+        <td class="num warn usd-cell">$160B~$250B</td>
+        <td class="num warn krw-cell" style="display:none;">약 233조~364조원</td>
+        <td>BIS OTC 통계</td>
+        <td style="font-size:11px;">헤지펀드+프로프 트레이딩 점유율 기반 역산. "빙산의 일각"</td>
+      </tr>
+      <tr>
+        <td>③ 트러스티 계좌 헤지</td>
+        <td class="num bear usd-cell">$1.3T~$1.7T</td>
+        <td class="num bear krw-cell" style="display:none;">약 1,890조~2,472조원</td>
+        <td>BIS Q1 2024</td>
+        <td style="font-size:11px;">일본 기관투자자 해외자산 $2.7T × 헤지비율 60~80%</td>
+      </tr>
+      <tr>
+        <td>④ FX 스왑 명목잔액</td>
+        <td class="num usd-cell" style="color:#c084fc;">$14.2T</td>
+        <td class="num krw-cell" style="display:none;color:#c084fc;">약 2경 643조원</td>
+        <td>BIS 2023말</td>
+        <td style="font-size:11px;">엔화가 한쪽에 있는 모든 스왑 포함. 대부분은 헤지·무역금융</td>
+      </tr>
+    </table>
+  </div>
+
+  <div class="box">
+    <div class="box-title">🏦 주요 IB 코멘트 — 규모 추정</div>
+    <div class="insight"><div class="insight-src">BIS Bulletin No.90 (2024.08)</div><div class="insight-txt">"FX 캐리트레이드의 전체 규모는 측정하기 어렵다. 온·오프 밸런스시트 합산 기준 중간값은 약 40조 엔(2,500억 달러)이지만, 데이터 공백으로 인해 이 수치는 하향 편향되어 있다."</div></div>
+    <div class="insight"><div class="insight-src">JPMorgan (2024.08.06, Arindam Sandilya)</div><div class="insight-txt">"캐리트레이드 청산은 아직 끝나지 않았다. 투기적 커뮤니티 기준으로 50~60% 청산이 완료된 상태다. 엔화는 여전히 가장 저평가된 통화 중 하나다."</div></div>
+    <div class="insight"><div class="insight-src">UBS James Malcolm (2024.08)</div><div class="insight-txt">"달러-엔 캐리트레이드는 최소 5,000억 달러 규모에 달했으며, 쇼크 전후 2~3주간 약 2,000억 달러가 청산됐다."</div></div>
+    <div class="insight"><div class="insight-src">Morgan Stanley (2025.12)</div><div class="insight-txt">"BOJ의 0.75% 인상 이후 약 5,000억 달러의 엔 캐리 포지션이 여전히 잔존하는 것으로 추정된다. 금리가 1.25% 이상으로 오르면 수익성 계산이 크게 달라진다."</div></div>
+    <div class="insight"><div class="insight-src">Deutsche Bank (2024)</div><div class="insight-txt">"일본 정부 대차대조표 전체를 포함하면 캐리트레이드 관련 규모는 GDP 대비 505%, 약 20조 달러에 달한다. 물론 이는 구조적·헤지성 포지션을 모두 포함한 광의 추정이다."</div></div>
+  </div>
+</div>
+
+<!-- ═══ TAB 5: UNWIND SCENARIO ═══ -->
+<div id="tab-unwind" class="panel">
+  <div class="cw">
+    <div class="cw-title">청산 시나리오별 글로벌 자산 충격 히트맵</div>
+    <div class="cw-sub">시나리오별 주요 자산군의 예상 영향 방향 및 강도</div>
+    <div class="hm-grid" style="margin-top:8px;">
+      <div class="hm-cell hm-head"></div>
+      <div class="hm-cell hm-head">① 점진적 청산</div>
+      <div class="hm-cell hm-head">② 급속 청산<br>(2024.8 재현)</div>
+      <div class="hm-cell hm-head">③ 전면 청산<br>(꼬리 리스크)</div>
+
+      <div class="hm-cell hm-label">엔/달러 (JPY)</div>
+      <div class="hm-cell hm-low">강세 5~8%<br>(150→140)</div>
+      <div class="hm-cell hm-mid">강세 10~15%<br>(157→133)</div>
+      <div class="hm-cell hm-hi">강세 20%+<br>(157→125)</div>
+
+      <div class="hm-cell hm-label">원/달러 (KRW)</div>
+      <div class="hm-cell hm-low">강세 3~5%<br>(~1,380)</div>
+      <div class="hm-cell hm-mid">강세 6~9%<br>(~1,320)</div>
+      <div class="hm-cell hm-hi">강세 10%+<br>(~1,300)</div>
+
+      <div class="hm-cell hm-label">닛케이 225</div>
+      <div class="hm-cell hm-low">-5~8%<br>수출주 압박</div>
+      <div class="hm-cell hm-mid">-12~20%<br>2024.8 재현</div>
+      <div class="hm-cell hm-hi">-25%+<br>1987 이후 최대</div>
+
+      <div class="hm-cell hm-label">미 나스닥</div>
+      <div class="hm-cell hm-low">-2~5%<br>제한적</div>
+      <div class="hm-cell hm-mid">-5~10%<br>AI주 집중 타격</div>
+      <div class="hm-cell hm-hi">-15%+<br>글로벌 디레버리징</div>
+
+      <div class="hm-cell hm-label">미 국채 (10Y)</div>
+      <div class="hm-cell hm-pos">금리 소폭 ↓<br>안전자산 수요</div>
+      <div class="hm-cell hm-pos">금리 ↓ (수요↑)<br>일본 매도 상쇄</div>
+      <div class="hm-cell hm-mid">불확실<br>매도vs수요 충돌</div>
+
+      <div class="hm-cell hm-label">EM 통화</div>
+      <div class="hm-cell hm-low">소폭 약세<br>캐리 축소</div>
+      <div class="hm-cell hm-mid">MXN·BRL·ZAR<br>5~10% 약세</div>
+      <div class="hm-cell hm-hi">EM 전반 급락<br>1997 소환 우려</div>
+
+      <div class="hm-cell hm-label">암호화폐</div>
+      <div class="hm-cell hm-low">-5~10%<br>리스크오프</div>
+      <div class="hm-cell hm-mid">-15~25%<br>레버리지 청산</div>
+      <div class="hm-cell hm-hi">-30%+<br>마진콜 연쇄</div>
+
+      <div class="hm-cell hm-label">청산 규모 추정</div>
+      <div class="hm-cell hm-low usd-hm">$50~150B<br>수개월에 걸쳐</div>
+      <div class="hm-cell hm-low krw-hm" style="display:none;">73~218조원<br>수개월에 걸쳐</div>
+      <div class="hm-cell hm-mid usd-hm">$200~400B<br>수일~수주</div>
+      <div class="hm-cell hm-mid krw-hm" style="display:none;">291~582조원<br>수일~수주</div>
+      <div class="hm-cell hm-hi usd-hm">$500B~1T+<br>수시간~수일</div>
+      <div class="hm-cell hm-hi krw-hm" style="display:none;">727조~1,454조원+<br>수시간~수일</div>
+    </div>
+  </div>
+
+  <div class="g2">
+    <div class="cw" style="margin:0;">
+      <div class="cw-title">시나리오별 청산 규모 비교</div>
+      <div id="unwindSub" class="cw-sub">단위: 십억 달러 (USD Bn)</div>
+      <canvas id="unwindChart" style="max-height:280px!important;"></canvas>
+    </div>
+    <div class="cw" style="margin:0;">
+      <div class="cw-title">JPY 강세 폭 vs. 닛케이 반응 (역사적)</div>
+      <div class="cw-sub">과거 주요 청산 에피소드 비교</div>
+      <canvas id="episodeChart" style="max-height:280px!important;"></canvas>
+    </div>
+  </div>
+
+  <div class="box">
+    <div class="box-title">⚡ 청산 트리거 & 현재 상태 진단</div>
+    <table class="tbl">
+      <tr><th>트리거</th><th>현재 상태</th><th>발동 임계점</th><th>위험도</th></tr>
+      <tr><td>BOJ 추가 인상</td><td style="font-size:11px;color:#94a3b8;">0.75% (2025.12 인상)</td><td>1.0% 도달 시</td><td class="warn">⚠ 높음</td></tr>
+      <tr><td>CFTC 엔 숏 급증</td><td style="font-size:11px;color:#94a3b8;">2024.8 이후 숏 40% 감소</td><td>순숏 재축적 시</td><td class="base">🔵 중간</td></tr>
+      <tr><td>미·일 금리차 축소</td><td style="font-size:11px;color:#94a3b8;">300bp → 250bp 이하 접근</td><td>200bp 이하</td><td class="warn">⚠ 높음</td></tr>
+      <tr><td>VIX 급등</td><td style="font-size:11px;color:#94a3b8;">~17 수준 (2025.12)</td><td>VIX 25+ 돌파</td><td class="bull">🟢 낮음</td></tr>
+      <tr><td>엔/달러 급락</td><td style="font-size:11px;color:#94a3b8;">157~160 박스권</td><td>145 이하 돌파</td><td class="warn">⚠ 높음</td></tr>
+      <tr><td>베센트 방일 압박</td><td style="font-size:11px;color:#94a3b8;">2026.05.11 방문 예정</td><td>BOJ 인상 전향 시</td><td class="bear">🔴 매우높음</td></tr>
+    </table>
+    <div class="divider"></div>
+    <div class="box-title">🏦 IB 코멘트 — 청산 리스크</div>
+    <div class="insight"><div class="insight-src">EBC Financial Group (2025.12)</div><div class="insight-txt">"캐리트레이드는 오늘의 금리를 두려워하는 게 아니다. 내일의 경로를 두려워한다. BOJ가 중립금리 1.5~2.0%를 향해 간다면 150엔 이상의 달러-엔 밸류에이션은 정당화하기 어렵다."</div></div>
+    <div class="insight"><div class="insight-src">Wellington Management (2024.09)</div><div class="insight-txt">"일본 투자자와 헤지펀드들은 가장 많이 오른 자산인 미국 모멘텀 주식을 팔아 엔화 숏 포지션을 청산했다. 미 국채 금리가 오히려 하락한 것은 이 때문이다."</div></div>
+    <div class="insight"><div class="insight-src">Monex Group Jesper Koll (2026.05)</div><div class="insight-txt">"BOJ는 계속 마이너스 실질금리를 허용하는 유일한 중앙은행이다. 국내 투자자들은 마이너스 수익에 대한 인내심이 전혀 없다. 개입은 브레이크를 밟으면서 액셀을 끝까지 밟는 것과 같다."</div></div>
+    <div class="note">※ 본 자료는 공개정보 기반 참고용이며 투자 권유가 아닙니다. | 출처: BIS, JPMorgan, UBS, Morgan Stanley, Deutsche Bank, Wellington, EBC, Monex, CNBC, Reuters, Bloomberg</div>
+  </div>
+</div>
+
+</div><!-- /container -->
+
+<script>
+// ══════════════════════════════════════════
+// DATA
+// ══════════════════════════════════════════
+const dates=["2022-06-05","2022-06-12","2022-06-19","2022-06-26","2022-07-03","2022-07-10","2022-07-17","2022-07-24","2022-07-31","2022-08-07","2022-08-14","2022-08-21","2022-08-28","2022-09-04","2022-09-11","2022-09-18","2022-09-25","2022-10-02","2022-10-09","2022-10-16","2022-10-23","2022-10-30","2022-11-06","2022-11-13","2022-11-20","2022-11-27","2022-12-04","2022-12-11","2022-12-18","2022-12-25","2023-01-01","2023-01-08","2023-01-15","2023-01-22","2023-01-29","2023-02-05","2023-02-12","2023-02-19","2023-02-26","2023-03-05","2023-03-12","2023-03-19","2023-03-26","2023-04-02","2023-04-09","2023-04-16","2023-04-23","2023-04-30","2023-05-07","2023-05-14","2023-05-21","2023-05-28","2023-06-04","2023-06-11","2023-06-18","2023-06-25","2023-07-02","2023-07-09","2023-07-16","2023-07-23","2023-07-30","2023-08-06","2023-08-13","2023-08-20","2023-08-27","2023-09-03","2023-09-10","2023-09-17","2023-09-24","2023-10-01","2023-10-08","2023-10-15","2023-10-22","2023-10-29","2023-11-05","2023-11-12","2023-11-19","2023-11-26","2023-12-03","2023-12-10","2023-12-17","2023-12-24","2023-12-31","2024-01-07","2024-01-14","2024-01-21","2024-01-28","2024-02-04","2024-02-11","2024-02-18","2024-02-25","2024-03-03","2024-03-10","2024-03-17","2024-03-24","2024-03-31","2024-04-07","2024-04-14","2024-04-21","2024-04-28","2024-05-05","2024-05-12","2024-05-19","2024-05-26","2024-06-02","2024-06-09","2024-06-16","2024-06-23","2024-06-30","2024-07-07","2024-07-14","2024-07-21","2024-07-28","2024-08-04","2024-08-11","2024-08-18","2024-08-25","2024-09-01","2024-09-08","2024-09-15","2024-09-22","2024-09-29","2024-10-06","2024-10-13","2024-10-20","2024-10-27","2024-11-03","2024-11-10","2024-11-17","2024-11-24","2024-12-01","2024-12-08","2024-12-15","2024-12-22","2024-12-29","2025-01-05","2025-01-12","2025-01-19","2025-01-26","2025-02-02","2025-02-09","2025-02-16","2025-02-23","2025-03-02","2025-03-09","2025-03-16","2025-03-23","2025-03-30","2025-04-06","2025-04-13","2025-04-20","2025-04-27","2025-05-04","2025-05-11","2025-05-18","2025-05-25","2025-06-01","2025-06-08","2025-06-15","2025-06-22","2025-06-29","2025-07-06","2025-07-13","2025-07-20","2025-07-27","2025-08-03","2025-08-10","2025-08-17","2025-08-24","2025-08-31","2025-09-07","2025-09-14","2025-09-21","2025-09-28","2025-10-05","2025-10-12","2025-10-19","2025-10-26","2025-11-02","2025-11-09","2025-11-16","2025-11-23","2025-11-30","2025-12-07","2025-12-14","2025-12-21","2025-12-28","2026-01-04","2026-01-11","2026-01-18","2026-01-25","2026-02-01","2026-02-08","2026-02-15","2026-02-22","2026-03-01","2026-03-08","2026-03-15","2026-03-22","2026-03-29","2026-04-05","2026-04-12","2026-04-19","2026-04-26","2026-05-03","2026-05-10"];
+const jpyData=[130.87,134.42,135.0,136.41,136.01,137.39,138.96,133.87,133.0,135.01,133.48,136.97,138.78,140.24,142.67,143.31,144.38,144.81,145.86,148.75,147.57,148.67,147.85,138.81,140.19,139.27,135.26,135.13,131.81,132.85,130.71,131.9,128.54,130.09,130.08,131.35,132.28,134.06,136.34,135.62,134.25,131.46,132.79,133.77,133.3,134.35,134.34,136.45,134.97,134.57,137.97,140.44,139.54,140.25,141.91,143.87,144.02,142.29,138.78,141.72,142.24,142.44,145.56,146.47,146.53,147.72,147.66,147.47,148.92,149.12,149.47,149.78,149.55,149.37,151.44,151.4,149.6,147.48,147.18,144.69,141.96,142.74,141.72,144.44,145.81,148.03,148.35,148.64,150.44,149.87,150.68,150.67,151.36,151.92,152.74,153.24,156.59,154.38,155.56,155.81,156.3,157.07,154.59,155.3,157.87,158.22,158.55,157.86,153.72,147.26,146.92,147.07,146.27,146.53,145.49,145.37,146.95,148.42,148.84,149.3,147.73,148.44,149.93,151.57,153.85,154.28,156.07,157.16,156.81,151.62,152.21,150.97,152.0,156.37,155.78,154.79,149.96,149.46,149.47,149.09,146.08,147.85,148.42,148.64,149.32,149.27,148.95,149.73,147.47,146.01,145.65,145.62,146.11,146.59,147.67,148.88,147.67,147.76,148.53,147.34,147.58,147.22,147.86,147.59,147.97,148.9,147.87,147.0,147.26,147.45,147.78,147.72,147.71,147.47,146.98,147.49,147.87,148.34,148.12,148.51,147.44,147.49,147.35,147.4,147.22,147.66,147.35,146.49,146.98,147.97,147.96,147.71,147.6,148.9,149.85,149.5,147.87,147.0,152.16,152.37,153.79,156.12,155.31,155.52,157.68,156.23,156.12,156.56,155.42,155.63,154.95,154.95,158.53,157.83,155.42,159.37,156.53,156.89];
+const krwData=[1242.6,1268.7,1287.1,1296.1,1293.5,1308.8,1313.0,1307.8,1303.5,1319.8,1323.7,1338.3,1349.8,1361.0,1389.2,1394.5,1411.4,1415.6,1424.6,1439.6,1439.4,1424.2,1401.0,1318.5,1330.2,1320.3,1315.3,1316.0,1294.6,1273.8,1271.9,1268.5,1242.9,1233.2,1224.6,1228.0,1262.7,1264.7,1289.0,1305.0,1304.0,1302.8,1305.2,1299.5,1305.1,1329.0,1338.1,1339.6,1340.4,1327.3,1345.3,1354.0,1333.5,1302.8,1285.1,1323.3,1322.9,1316.4,1314.0,1282.8,1277.3,1276.3,1330.4,1335.3,1323.0,1330.4,1335.3,1339.6,1363.4,1350.3,1349.8,1338.5,1352.3,1322.2,1313.3,1290.7,1291.3,1293.6,1290.0,1313.8,1313.8,1316.3,1295.7,1320.0,1312.7,1331.5,1338.8,1333.2,1335.6,1330.7,1310.2,1314.3,1330.4,1330.4,1333.6,1315.2,1335.7,1337.2,1346.1,1350.2,1370.8,1362.4,1366.5,1369.7,1376.1,1384.0,1371.2,1369.5,1377.6,1365.9,1376.5,1371.9,1364.4,1357.1,1333.8,1337.1,1341.2,1346.5,1320.0,1335.1,1312.1,1336.2,1340.4,1347.3,1388.9,1391.3,1401.2,1419.0,1436.7,1427.6,1328.6,1306.7,1311.5,1327.3,1329.5,1371.2,1382.3,1437.8,1434.2,1461.6,1462.5,1472.7,1466.4,1466.8,1467.7,1473.0,1467.1,1409.1,1396.6,1400.2,1415.7,1394.3,1366.3,1371.0,1362.6,1365.4,1367.6,1381.0,1388.1,1387.4,1381.8,1388.0,1389.3,1390.7,1392.2,1392.4,1390.9,1390.5,1387.7,1386.4,1391.7,1388.0,1389.0,1378.7,1380.0,1393.4,1392.5,1392.4,1397.3,1400.3,1412.3,1398.8,1402.7,1403.0,1399.7,1405.6,1408.5,1418.2,1425.6,1429.9,1428.4,1436.3,1450.1,1455.7,1466.2,1467.3,1479.3,1480.7,1484.3,1483.0,1453.9];
+
+const events=[
+  {date:"2022-09-22",label:"日 재무성\n1차 개입",color:"#ef4444",y:"top"},
+  {date:"2022-10-21",label:"日 2차\n개입",color:"#ef4444",y:"top"},
+  {date:"2022-11-10",label:"美 CPI↓\n피벗 기대",color:"#34d399",y:"bottom"},
+  {date:"2023-03-10",label:"SVB\n사태",color:"#a78bfa",y:"top"},
+  {date:"2023-11-01",label:"연준\n동결 신호",color:"#34d399",y:"bottom"},
+  {date:"2024-03-19",label:"BOJ\n마이너스\n해제",color:"#f97316",y:"top"},
+  {date:"2024-04-29",label:"日 개입\n(160↑)",color:"#ef4444",y:"bottom"},
+  {date:"2024-07-31",label:"BOJ\n0.25%\n인상",color:"#f97316",y:"top"},
+  {date:"2024-08-05",label:"캐리\n청산 쇼크",color:"#f87171",y:"bottom"},
+  {date:"2024-09-18",label:"연준\n빅컷\n50bp",color:"#34d399",y:"top"},
+  {date:"2024-12-03",label:"韓\n비상계엄",color:"#c084fc",y:"bottom"},
+  {date:"2025-01-20",label:"트럼프\n취임",color:"#fbbf24",y:"top"},
+  {date:"2025-04-02",label:"상호\n관세",color:"#fbbf24",y:"bottom"},
+  {date:"2026-05-11",label:"베센트\n訪日",color:"#c084fc",y:"top"},
+];
+
+const COLORS={blue:"#3b82f6",amber:"#f59e0b",green:"#34d399",red:"#f87171",yellow:"#fbbf24",purple:"#c084fc",gray:"#475569",grid:"#1a2535"};
+
+function makeGradient(ctx,color,alpha1=0.3,alpha2=0){
+  const g=ctx.createLinearGradient(0,0,0,400);
+  g.addColorStop(0,color.replace(')',`,${alpha1})`).replace('rgb','rgba'));
+  g.addColorStop(1,color.replace(')',`,${alpha2})`).replace('rgb','rgba'));
+  return g;
+}
+
+// band plugin
+const bandPlugin={id:'band',beforeDraw(chart){
+  const{ctx,scales,chartArea}=chart;
+  if(!scales.x||!chartArea)return;
+  ctx.save();ctx.fillStyle='rgba(34,197,94,0.07)';
+  let inB=false,sX=0;
+  for(let i=0;i<jpyData.length;i++){
+    const inR=jpyData[i]>=145&&jpyData[i]<=150;
+    const x=scales.x.getPixelForValue(i);
+    if(inR&&!inB){inB=true;sX=x;}
+    else if(!inR&&inB){ctx.fillRect(sX,chartArea.top,x-sX,chartArea.bottom-chartArea.top);inB=false;}
+  }
+  if(inB){const x=scales.x.getPixelForValue(jpyData.length-1);ctx.fillRect(sX,chartArea.top,x-sX,chartArea.bottom-chartArea.top);}
+  ctx.restore();
+}};
+
+function evPlugin(evts){return{id:'evl',afterDraw(chart){
+  const{ctx,scales,chartArea}=chart;
+  if(!scales.x)return;
+  ctx.save();
+  evts.forEach(ev=>{
+    let idx=-1,minD=Infinity;
+    dates.forEach((d,i)=>{const diff=Math.abs(new Date(d)-new Date(ev.date));if(diff<minD){minD=diff;idx=i;}});
+    if(idx<0||minD>21*86400*1000)return;
+    const x=scales.x.getPixelForValue(idx);
+    ctx.strokeStyle=ev.color;ctx.lineWidth=1.5;ctx.setLineDash([4,3]);
+    ctx.beginPath();ctx.moveTo(x,chartArea.top);ctx.lineTo(x,chartArea.bottom);ctx.stroke();
+    ctx.setLineDash([]);ctx.fillStyle=ev.color;ctx.font='9px Segoe UI,sans-serif';ctx.textAlign='center';
+    const lines=ev.label.split('\n'),lh=10,isT=ev.y==='top';
+    const sy=isT?chartArea.top+7:chartArea.bottom-7-lines.length*lh;
+    lines.forEach((l,li)=>ctx.fillText(l,x,sy+li*lh));
+  });
+  ctx.restore();
+}};}
+
+const scaleDefaults={ticks:{color:'#475569'},grid:{color:COLORS.grid}};
+const tooltipDefaults={backgroundColor:'#0d1928',titleColor:'#94a3b8',bodyColor:'#e2e8f0',borderColor:'#1e3a5f',borderWidth:1};
+
+// ── TAB1: MAIN CHART ──
+const mainCtx=document.getElementById('mainChart').getContext('2d');
+new Chart(mainCtx,{type:'line',plugins:[bandPlugin,evPlugin(events)],
+  data:{labels:dates,datasets:[
+    {label:'USDJPY',data:jpyData,borderColor:COLORS.amber,borderWidth:2,pointRadius:0,tension:.3,yAxisID:'y'},
+    {label:'USDKRW',data:krwData,borderColor:COLORS.blue,borderWidth:2,pointRadius:0,tension:.3,yAxisID:'y1'},
+  ]},
+  options:{responsive:true,interaction:{mode:'index',intersect:false},
+    plugins:{legend:{display:false},tooltip:{...tooltipDefaults,callbacks:{label:c=>c.dataset.label==='USDJPY'?`USDJPY: ${c.parsed.y.toFixed(2)}`:`USDKRW: ${c.parsed.y.toFixed(1)}`}}},
+    scales:{
+      x:{...scaleDefaults,ticks:{...scaleDefaults.ticks,maxTicksLimit:12,callback:(v,i)=>dates[i]?dates[i].slice(0,7):''}},
+      y:{...scaleDefaults,position:'left',min:125,max:170,title:{display:true,text:'USDJPY',color:COLORS.amber,font:{size:10}},ticks:{color:COLORS.amber}},
+      y1:{...scaleDefaults,position:'right',min:1180,max:1560,title:{display:true,text:'USDKRW',color:COLORS.blue,font:{size:10}},ticks:{color:COLORS.blue},grid:{display:false}},
+    }}
+});
+
+// ── TAB2: SCATTER ──
+const sBand=[],sOther=[];
+for(let i=0;i<jpyData.length;i++){
+  const pt={x:jpyData[i],y:krwData[i]};
+  (jpyData[i]>=145&&jpyData[i]<=150?sBand:sOther).push(pt);
+}
+const n=jpyData.length,mX=jpyData.reduce((a,b)=>a+b,0)/n,mY=krwData.reduce((a,b)=>a+b,0)/n;
+const num=jpyData.reduce((s,x,i)=>s+(x-mX)*(krwData[i]-mY),0),den=jpyData.reduce((s,x)=>s+(x-mX)**2,0);
+const sl=num/den,ic=mY-sl*mX;
+new Chart(document.getElementById('scatterChart').getContext('2d'),{type:'scatter',
+  data:{datasets:[
+    {label:'일반 구간',data:sOther,backgroundColor:'rgba(59,130,246,0.25)',pointRadius:3},
+    {label:'JPY 145~150',data:sBand,backgroundColor:'rgba(251,146,60,0.65)',pointRadius:4},
+    {label:'현재',data:[{x:156.9,y:1453.9}],backgroundColor:'#ef4444',pointRadius:9,pointStyle:'star'},
+    {label:'회귀선',data:[{x:125,y:sl*125+ic},{x:165,y:sl*165+ic}],type:'line',borderColor:'#334155',borderWidth:1,pointRadius:0,borderDash:[5,3]},
+    {label:'145 기본시나리오',data:[{x:145,y:1372}],backgroundColor:'#fbbf24',pointRadius:10,pointStyle:'triangle'},
+  ]},
+  options:{responsive:true,plugins:{legend:{labels:{color:'#64748b',font:{size:10}}},tooltip:{...tooltipDefaults,callbacks:{label:c=>c.dataset.label==='회귀선'?null:`${c.dataset.label}: JPY ${c.parsed.x.toFixed(1)} / KRW ${c.parsed.y.toFixed(0)}`}}},
+    scales:{
+      x:{...scaleDefaults,title:{display:true,text:'USDJPY',color:'#64748b'},min:125,max:167},
+      y:{...scaleDefaults,title:{display:true,text:'USDKRW',color:'#64748b'},min:1180,max:1540},
+    }}
+});
+
+// ── TAB3: SCENARIO ──
+const rN=55,rDates=dates.slice(-rN),rKrw=krwData.slice(-rN);
+const fwN=14,fwDates=[];
+const ld=new Date(rDates[rDates.length-1]);
+for(let i=1;i<=fwN;i++){const d=new Date(ld);d.setDate(d.getDate()+i*7);fwDates.push(d.toISOString().slice(0,10));}
+const jpyFwd=fwDates.map((_,i)=>156.9-(156.9-145)*((i+1)/fwN));
+const kBase=jpyFwd.map(j=>8.042*j+206.1),kBull=jpyFwd.map(j=>8.042*j+206.1-22),kBear=jpyFwd.map(j=>8.042*j+206.1+23);
+const pad=new Array(rN-1).fill(null),allL=[...rDates,...fwDates];
+new Chart(document.getElementById('scenarioChart').getContext('2d'),{type:'line',
+  plugins:[{id:'spl',afterDraw(chart){
+    const{ctx,scales,chartArea}=chart;
+    const x=scales.x.getPixelForValue(rN-1);
+    ctx.save();
+    ctx.fillStyle='rgba(196,132,252,0.06)';ctx.fillRect(x,chartArea.top,chartArea.right-x,chartArea.bottom-chartArea.top);
+    ctx.strokeStyle='#334155';ctx.lineWidth=1.5;ctx.setLineDash([5,4]);
+    ctx.beginPath();ctx.moveTo(x,chartArea.top);ctx.lineTo(x,chartArea.bottom);ctx.stroke();
+    ctx.setLineDash([]);ctx.fillStyle='#475569';ctx.font='10px Segoe UI';ctx.fillText('현재 →',x+4,chartArea.top+13);
+    ctx.restore();
+  }}],
+  data:{labels:allL,datasets:[
+    {label:'USDKRW 실제',data:[...rKrw,...new Array(fwN).fill(null)],borderColor:COLORS.blue,borderWidth:2.5,pointRadius:0,tension:.3,spanGaps:false},
+    {label:'기본 (1,372)',data:[...pad,rKrw[rN-1],...kBase],borderColor:COLORS.yellow,borderWidth:2,borderDash:[6,4],pointRadius:0,tension:.3,spanGaps:false},
+    {label:'강세 (1,350)',data:[...pad,rKrw[rN-1],...kBull],borderColor:COLORS.green,borderWidth:1.5,borderDash:[4,4],pointRadius:0,tension:.3,spanGaps:false},
+    {label:'약세 (1,395)',data:[...pad,rKrw[rN-1],...kBear],borderColor:COLORS.red,borderWidth:1.5,borderDash:[4,4],pointRadius:0,tension:.3,spanGaps:false,fill:'-1',backgroundColor:'rgba(248,113,113,0.07)'},
+  ]},
+  options:{responsive:true,interaction:{mode:'index',intersect:false},
+    plugins:{legend:{labels:{color:'#64748b',font:{size:10}}},tooltip:{...tooltipDefaults,callbacks:{label:c=>c.parsed.y!=null?`${c.dataset.label.split('(')[0].trim()}: ${c.parsed.y.toFixed(0)}원`:null}}},
+    scales:{
+      x:{...scaleDefaults,ticks:{...scaleDefaults.ticks,maxTicksLimit:12,callback:(v,i)=>allL[i]?allL[i].slice(0,7):''}},
+      y:{...scaleDefaults,min:1280,max:1530,title:{display:true,text:'USDKRW',color:'#64748b',font:{size:10}},ticks:{color:'#64748b'}},
+    }}
+});
+
+// ── TAB4: CARRY HISTORY ──
+const KRW_RATE = 1454; // 1 USD = 1,454원
+// USD Bn → 조원: × KRW_RATE / 1000  (1B$ × 1454원 = 1.454조원)
+function toJo(usdBn){ return +(usdBn * KRW_RATE / 1000).toFixed(1); }
+
+const histUSD = [800,600,1200,1300,500,150,261,500,450];
+const histKRW = histUSD.map(toJo);
+
+const carryHistChart = new Chart(document.getElementById('carryHistChart').getContext('2d'),{type:'bar',
+  data:{labels:['2008\nGFC 전','2012\n아베노믹스','2015\n피크','2021~22\n재확대','2024.7\n쇼크 전','2024.8\n청산 후','2025.초','2025.12\nBOJ인상','2026.5\n현재'],
+    datasets:[{
+      label:'추정 잔액',
+      data:[...histUSD],
+      backgroundColor:['#1e3a5f','#1e3a5f','#1e3a5f','#1e4a2f','#2d1a00','#2d0a0a','#1a2d3f','#2d1a00','#fbbf2440'],
+      borderColor:['#3b82f6','#3b82f6','#3b82f6','#34d399','#f59e0b','#ef4444','#60a5fa','#f59e0b','#fbbf24'],
+      borderWidth:2,borderRadius:4,
+    }]},
+  options:{responsive:true,plugins:{legend:{display:false},tooltip:{...tooltipDefaults,callbacks:{label:c=>currentUnit==='usd'?`추정 잔액: $${c.parsed.y}B`:`추정 잔액: ${c.parsed.y}조원`}}},
+    scales:{
+      x:{...scaleDefaults,ticks:{...scaleDefaults.ticks,font:{size:9}}},
+      y:{...scaleDefaults,title:{display:true,text:'십억 달러 (USD Bn)',color:'#475569',font:{size:9}},ticks:{color:'#475569'}},
+    }}
+});
+
+// ── TAB4: IB ESTIMATES ──
+const ibUSD = [14,271,160,500,500,500,3400,20000];
+const ibKRW = ibUSD.map(toJo);
+
+const carryIBChart = new Chart(document.getElementById('carryIBChart').getContext('2d'),{type:'bar',
+  data:{labels:['CFTC 선물\n(숏 포지션)','BIS 해외\n엔화대출','BIS 헤지펀드\n추정치','UBS\n(피크)','JPMorgan\n(투기적)','Morgan Stanley\n(잔존)','일본 NII\n기반','Deutsche Bank\n(광의)'],
+    datasets:[{
+      label:'추정 규모',
+      data:[...ibUSD],
+      backgroundColor:ctx=>{
+        const i=ctx.dataIndex;
+        return i<=2?'rgba(59,130,246,0.3)':i<=5?'rgba(251,146,60,0.3)':i===6?'rgba(167,139,250,0.3)':'rgba(248,113,113,0.3)';
+      },
+      borderColor:ctx=>{
+        const i=ctx.dataIndex;
+        return i<=2?'#3b82f6':i<=5?'#f59e0b':i===6?'#a78bfa':'#f87171';
+      },
+      borderWidth:2,borderRadius:4,
+    }]},
+  options:{responsive:true,plugins:{
+    legend:{display:false},
+    tooltip:{...tooltipDefaults,callbacks:{label:c=>{
+      const v=c.parsed.y;
+      if(currentUnit==='usd') return `$${v>=1000?(v/1000).toFixed(1)+'T':v+'B'}`;
+      return `${v>=10000?(v/10000).toFixed(1)+'경원':v+'조원'}`;
+    }}},
+  },
+  scales:{
+    x:{...scaleDefaults,ticks:{...scaleDefaults.ticks,font:{size:9}}},
+    y:{...scaleDefaults,type:'logarithmic',title:{display:true,text:'규모 ($B, 로그스케일)',color:'#475569',font:{size:9}},ticks:{color:'#475569',callback:v=>v>=1000?`$${v/1000}T`:`$${v}B`}},
+  }}
+});
+
+// ── TAB5: UNWIND BAR ──
+const unwindMin_USD=[50,200,500], unwindAdd_USD=[100,200,500];
+const unwindMin_KRW=unwindMin_USD.map(toJo), unwindAdd_KRW=unwindAdd_USD.map(toJo);
+
+const unwindChart = new Chart(document.getElementById('unwindChart').getContext('2d'),{type:'bar',
+  data:{labels:['① 점진적 청산\n(기본)','② 급속 청산\n(2024.8형)','③ 전면 청산\n(꼬리 리스크)'],
+    datasets:[
+      {label:'최소 청산액',data:[...unwindMin_USD],backgroundColor:'rgba(52,211,153,0.3)',borderColor:'#34d399',borderWidth:2,borderRadius:4,stack:'s'},
+      {label:'추가 청산 가능',data:[...unwindAdd_USD],backgroundColor:'rgba(251,191,36,0.3)',borderColor:'#fbbf24',borderWidth:2,borderRadius:4,stack:'s'},
+    ]},
+  options:{responsive:true,plugins:{legend:{labels:{color:'#64748b',font:{size:10}}},tooltip:{...tooltipDefaults,callbacks:{label:c=>currentUnit==='usd'?`${c.dataset.label}: $${c.parsed.y}B`:`${c.dataset.label}: ${c.parsed.y}조원`}}},
+    scales:{
+      x:{...scaleDefaults,ticks:{...scaleDefaults.ticks,font:{size:9}}},
+      y:{...scaleDefaults,title:{display:true,text:'청산 규모 ($B)',color:'#475569',font:{size:9}},ticks:{color:'#475569',callback:v=>`$${v}B`}},
+    }}
+});
+
+// ── TAB5: EPISODE SCATTER ──
+new Chart(document.getElementById('episodeChart').getContext('2d'),{type:'scatter',
+  data:{datasets:[
+    {label:'1998 LTCM',data:[{x:-18,y:-12}],backgroundColor:'#a78bfa',pointRadius:8},
+    {label:'2007 서브프라임',data:[{x:-22,y:-15}],backgroundColor:'#f87171',pointRadius:8},
+    {label:'2022.9 1차 개입',data:[{x:8,y:3}],backgroundColor:'#34d399',pointRadius:8},
+    {label:'2024.8 캐리쇼크',data:[{x:-13,y:-20}],backgroundColor:'#ef4444',pointRadius:12},
+    {label:'⭐ 베센트 시나리오 기본',data:[{x:-8,y:-8}],backgroundColor:'#fbbf24',pointRadius:10,pointStyle:'triangle'},
+    {label:'⭐ 베센트 시나리오 급속',data:[{x:-13,y:-18}],backgroundColor:'#f97316',pointRadius:10,pointStyle:'triangle'},
+  ]},
+  options:{responsive:true,
+    plugins:{legend:{labels:{color:'#64748b',font:{size:9},boxWidth:12}},
+      tooltip:{...tooltipDefaults,callbacks:{label:c=>`${c.dataset.label}: JPY ${c.parsed.x>0?'+':''}${c.parsed.x}% / 닛케이 ${c.parsed.y}%`}}},
+    scales:{
+      x:{...scaleDefaults,title:{display:true,text:'JPY 변화율 (%)',color:'#64748b',font:{size:9}},min:-30,max:15},
+      y:{...scaleDefaults,title:{display:true,text:'닛케이 변화율 (%)',color:'#64748b',font:{size:9}},min:-30,max:10},
+    }}
+});
+
+// ── UNIT TOGGLE ──
+let currentUnit = 'usd';
+
+function setUnit(unit){
+  currentUnit = unit;
+  const isKRW = unit === 'krw';
+
+  // 버튼 스타일
+  document.getElementById('btnUSD').style.cssText = `padding:7px 18px;font-size:12px;font-weight:700;border:none;cursor:pointer;transition:all .2s;background:${isKRW?'transparent':'#2563eb'};color:${isKRW?'#64748b':'#fff'};`;
+  document.getElementById('btnKRW').style.cssText = `padding:7px 18px;font-size:12px;font-weight:700;border:none;cursor:pointer;transition:all .2s;background:${isKRW?'#2563eb':'transparent'};color:${isKRW?'#fff':'#64748b'};`;
+
+  // 테이블 셀 토글
+  document.querySelectorAll('.usd-cell').forEach(el=>el.style.display=isKRW?'none':'');
+  document.querySelectorAll('.krw-cell').forEach(el=>el.style.display=isKRW?'':'none');
+  document.getElementById('th-scale').style.display=isKRW?'none':'';
+  document.getElementById('th-scale-krw').style.display=isKRW?'':'none';
+
+  // 히트맵 청산규모 토글
+  document.querySelectorAll('.usd-hm').forEach(el=>el.style.display=isKRW?'none':'');
+  document.querySelectorAll('.krw-hm').forEach(el=>el.style.display=isKRW?'':'none');
+
+  // 서브타이틀
+  document.getElementById('carryHistSub').textContent = isKRW?'투기적 포지션 기준 추정치 (단위: 조원, 1USD=1,454원)':'투기적 포지션 기준 추정치 (단위: 십억 달러)';
+  document.getElementById('carryIBSub').textContent = isKRW?'협의(투기적) ~ 광의(구조적) 스펙트럼 (단위: 조원)':'협의(투기적) ~ 광의(구조적) 스펙트럼';
+  document.getElementById('unwindSub').textContent = isKRW?'단위: 조원 (1USD=1,454원)':'단위: 십억 달러 (USD Bn)';
+
+  // ── carryHistChart 업데이트 ──
+  carryHistChart.data.datasets[0].data = isKRW ? [...histKRW] : [...histUSD];
+  carryHistChart.options.scales.y.title.text = isKRW?'조원':'십억 달러 (USD Bn)';
+  carryHistChart.options.scales.y.ticks.callback = isKRW ? v=>`${v}조` : v=>v;
+  carryHistChart.update();
+
+  // ── carryIBChart 업데이트 ──
+  carryIBChart.data.datasets[0].data = isKRW ? [...ibKRW] : [...ibUSD];
+  carryIBChart.options.scales.y.title.text = isKRW?'규모 (조원, 로그스케일)':'규모 ($B, 로그스케일)';
+  carryIBChart.options.scales.y.ticks.callback = isKRW
+    ? v => v>=10000?`${(v/10000).toFixed(0)}경원`:v>=1000?`${(v/1000).toFixed(0)}천조`:`${v}조`
+    : v => v>=1000?`$${v/1000}T`:`$${v}B`;
+  carryIBChart.update();
+
+  // ── unwindChart 업데이트 ──
+  unwindChart.data.datasets[0].data = isKRW ? [...unwindMin_KRW] : [...unwindMin_USD];
+  unwindChart.data.datasets[1].data = isKRW ? [...unwindAdd_KRW] : [...unwindAdd_USD];
+  unwindChart.options.scales.y.title.text = isKRW?'청산 규모 (조원)':'청산 규모 ($B)';
+  unwindChart.options.scales.y.ticks.callback = isKRW ? v=>`${v}조` : v=>`$${v}B`;
+  unwindChart.update();
+}
+
+// ── TAB SWITCH ──
+function sw(name,el){
+  document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.getElementById('tab-'+name).classList.add('active');
+  event.currentTarget.classList.add('active');
+}
+</script>
+</body>
+</html>
